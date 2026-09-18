@@ -8,8 +8,7 @@ import { dirname, join } from "path";
 import fs from "fs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-
-const volumePath = process.env.VOLUME;
+import { isAbsolute, join, dirname } from "path";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -28,7 +27,10 @@ const USERS = [
 ];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, volumePath);
+const rawVolume = process.env.VOLUME || "data";
+
+// Se for absoluto (/data), usa direto; se for relativo, junta com __dirname
+const DATA_DIR = isAbsolute(rawVolume) ? rawVolume : join(__dirname, rawVolume);
 const PARTICIPANTS_FILE = join(DATA_DIR, "participants.json");
 const ATTENDANCE_FILE = join(DATA_DIR, "attendance.json");
 
