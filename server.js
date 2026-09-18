@@ -4,11 +4,10 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import QRCode from "qrcode";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, isAbsolute } from "path";
 import fs from "fs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { isAbsolute, join, dirname } from "path";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
