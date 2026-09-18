@@ -334,6 +334,7 @@ async function onScan(text) {
       <div class="icon">${r.duplicado ? "ℹ️" : "✅"}</div>
       <div class="name">${r.nome}</div>
       <div class="meta">${r.instituicao ? r.instituicao + " · " : ""}${r.msg} às ${r.horario}</div>`;
+    stopScanner()
   } catch (e) {
     box.className = "scan-result show err";
     box.innerHTML = `

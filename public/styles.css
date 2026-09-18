@@ -49,7 +49,7 @@ header h1 {
 }
 
 header p {
-    margin: -3px 0 0;
+    margin: -4px 0px 0px 0px;
     color: var(--muted);
     font-size: 13px;
 }
@@ -205,23 +205,23 @@ button:active {
     position: relative;
 }
 
-.divider::before,
+/* .divider::before,
 .divider::after {
     content: "";
     position: absolute;
     top: 50%;
-    width: 38%;
+    width: 50%;
     height: 1px;
     background: var(--line);
-}
+} */
 
-.divider::before {
+/* .divider::before {
     left: 0;
 }
 
 .divider::after {
     right: 0;
-}
+} */
 
 .stats {
     display: flex;
