@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>WORCAP 2026 Credenciamento</title>
+  <link rel="icon" type="image/png" href="assets/icon.ico">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <header id="appHeader" style="display: none; justify-content: space-between; align-items: flex-start;">
+    <div class="main-header">
+      <div class="eyebrow">
+        <img src="assets/icon.png" alt="Descrição da imagem" class="img-icon">
+      </div>
+      <div style="height: 70px;">
+        <h1>Credenciamento</h1>
+        <div class="header-profile">
+          <p id="userRoleBadge" style="color: var(--gold); font-weight:600;"></p>
+          <button id="btnLogout" class="btn-ghost" style="margin-left: 10px; padding: 6px 12px; font-size: 12px; display: none;">Sair</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- TELA DE LOGIN -->
+  <div id="loginOverlay" style="padding: 24px; max-width: 380px; margin: 40px auto; display: none; margin-top: 160px;">
+    <div class="card">
+      <form type="submit">
+        <h2>Acesso ao Sistema</h2>
+        <p class="hint">Entre com suas credenciais.</p>
+        <label class="field" for="txtUser">Usuário</label>
+        <input type="text" id="txtUser" placeholder="admin ou operador" />
+        <br><br>
+        <label class="field" for="txtPass">Senha</label>
+        <input type="password" id="txtPass"
+          style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fcfbf7;" />
+        <button class="btn-primary" style="margin-top:18px" id="btnLogin">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <main>
+    <!-- VIEW: IMPORTAR / CRACHÁS (ADMIN) -->
+    <section id="view-setup" class="view active">
+      <div class="card">
+        <h2>Importar inscritos</h2>
+        <p class="hint">A planilha precisa de uma coluna <strong>nome</strong>. Colunas <em>email</em> e
+          <em>instituicao</em> são opcionais.
+        </p>
+        <label class="file-drop" id="fileDrop">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden />
+          Toque para escolher um arquivo <strong>.xlsx / .csv</strong><br><span id="fileName"></span>
+        </label>
+        <button class="btn-primary" style="margin-top:14px" id="btnImportFile">Importar arquivo</button>
+
+        <div class="divider">ou do Google Sheets</div>
+        <label class="field" for="sheetUrl">URL publicada como CSV</label>
+        <input type="url" id="sheetUrl" placeholder="https://docs.google.com/.../pub?output=csv" />
+        <p class="hint" style="margin-top:6px">No Sheets: Arquivo → Compartilhar → Publicar na web → CSV.</p>
+        <button class="btn-ghost" style="width:100%;margin-top:8px" id="btnImportUrl">Importar da URL</button>
+      </div>
+
+      <div class="card">
+        <h2>Crachás com QR Code</h2>
+        <p class="hint" id="setupCount">Nenhum participante importado ainda.</p>
+        <div class="btn-row">
+          <button class="btn-ghost" id="btnGenBadges">Gerar crachás</button>
+          <button class="btn-ghost" id="btnPrint">Imprimir</button>
+        </div>
+        <div id="printArea" style="margin-top:16px"></div>
+      </div>
+    </section>
+
+    <!-- VIEW: SCANNER (USER e ADMIN) -->
+    <section id="view-scan" class="view">
+      <div class="card">
+        <h2>Credenciar Participante</h2>
+        <p class="hint">Escolha o período ou use a detecção automática pelo horário.</p>
+
+        <label class="field" for="scanPeriodo">Período de Credenciamento</label>
+        <select id="scanPeriodo" style="width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; margin-bottom: 14px; background: #fcfbf7;">
+          <option value="auto">Automático (Horário atual)</option>
+          <option value="Manhã">Manhã</option>
+          <option value="Tarde">Tarde</option>
+        </select>
+
+        <div id="reader"></div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btnStartScan">Iniciar câmera</button>
+          <button class="btn-ghost" id="btnStopScan">Parar</button>
+        </div>
+        <div class="scan-result" id="scanResult"></div>
+      </div>
+    </section>
+
+    <!-- VIEW: PRESENÇAS (USER e ADMIN) -->
+    <section id="view-list" class="view">
+      <div class="stats">
+        <div class="stat">
+          <div class="num" id="stTotal">0</div>
+          <div class="lbl">Inscritos</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stHojeManha">0</div>
+          <div class="lbl">Hoje (Manhã)</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stHojeTarde">0</div>
+          <div class="lbl">Hoje (Tarde)</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Presenças registradas</h2>
+        <p class="hint">Mais recentes primeiro. Uma presença por participante em cada período.</p>
+        <button class="btn-ghost" style="width:100%;margin-bottom:14px" id="btnExport">Exportar planilha
+          (.xlsx)</button>
+        <ul class="plist" id="attList">
+          <li class="empty">Sem registros ainda.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- VIEW: CONFERIR PRESENÇAS (ADMIN) -->
+    <section id="view-validate" class="view">
+      <div class="card">
+        <h2>Conferir presenças</h2>
+        <p class="hint">
+          Visualize as estatísticas consolidadas dos credenciamentos atuais do sistema ou faça o upload de uma planilha externa.
+        </p>
+
+        <button class="btn-primary" style="width: 100%; margin-bottom: 16px;" id="btnLoadCurrentStats">
+          Carregar dados atuais do sistema
+        </button>
+
+        <div class="divider">ou importar planilha externa</div>
+
+        <label class="file-drop" id="fileDropValidate" style="margin-top: 10px;">
+          <input type="file" id="fileInputValidate" accept=".xlsx,.xls,.csv" hidden />
+          Upload da planilha de presenças <strong>.xlsx / .csv</strong><br>
+          <span id="fileNameValidate"></span>
+        </label>
+        <button class="btn-ghost" style="width: 100%; margin-top:14px" id="btnValidate">Validar planilha</button>
+      </div>
+
+      <div id="validateResults"></div>
+    </section>
+  </main>
+
+  <nav>
+    <button id="setup" class="active" data-view="setup"><span class="ico">📋</span>Inscritos</button>
+    <button id="scan" data-view="scan"><span class="ico">📷</span>Credenciar</button>
+    <button id="list" data-view="list"><span class="ico">✅</span>Presenças</button>
+    <button id="validate" data-view="validate"><span class="ico">🧾</span>Conferir</button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="scripts.js"></script>
+</body>
+
+</html>
