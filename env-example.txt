@@ -1,0 +1,14 @@
+# Configurações do Servidor
+PORT=3000
+
+VOLUME=data
+
+JWT_SECRET=sua-chave-secreta-super-forte-aqui
+
+# Credenciais ADMIN
+ADMIN_USER=admin
+ADMIN_PASS=minhasenha_admin_segura
+
+# Credenciais OPERADOR
+OPERATOR_USER=operador
+OPERATOR_PASS=minhasenha_operador_segura
