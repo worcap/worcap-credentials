@@ -133,7 +133,7 @@ function switchView(viewName) {
   for (let b of btns) {
     let btn = document.getElementById(`${b}`);
     if (b === viewName) {
-      btn.style.backgroundColor = "#8b8b8b";
+      btn.style.backgroundColor = "#b8b8b8";
       btn.style.color = "white";
     } else {
       btn.style.backgroundColor = "white";
