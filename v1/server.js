@@ -57,102 +57,6 @@ function getPeriodoAtual(dataObj = new Date()) {
   return dataObj.getHours() < 13 ? "Manhã" : "Tarde";
 }
 
-// ---------- Leitura de planilhas com acentuação correta ----------
-// Arquivos .xlsx (ZIP, começa com "PK") e .xls (OLE) são binários e já trazem o texto em Unicode.
-function isBinarySheet(buf) {
-  if (buf.length < 4) return false;
-  const zip = buf[0] === 0x50 && buf[1] === 0x4b;
-  const ole = buf[0] === 0xd0 && buf[1] === 0xcf && buf[2] === 0x11 && buf[3] === 0xe0;
-  return zip || ole;
-}
-
-// CSV é texto: tenta UTF-8 (padrão do Google Sheets e do "CSV UTF-8" do Excel)
-// e, se os bytes não forem UTF-8 válido, cai para Windows-1252 (CSV comum do Excel).
-function decodeText(buf) {
-  let txt;
-  try {
-    txt = new TextDecoder("utf-8", { fatal: true }).decode(buf);
-  } catch {
-    txt = new TextDecoder("windows-1252").decode(buf);
-  }
-  if (txt.charCodeAt(0) === 0xfeff) txt = txt.slice(1); // remove BOM
-  return txt.normalize("NFC");
-}
-
-function readSheetRows(buf) {
-  const wb = isBinarySheet(buf)
-    ? XLSX.read(buf, { type: "buffer" })
-    : XLSX.read(decodeText(buf), { type: "string" });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(sheet, { defval: "" });
-}
-
-// Compara cabeçalhos ignorando maiúsculas, espaços e acentos ("Instituição" = "instituicao")
-const normKey = (k) =>
-  String(k).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-
-function findCol(obj, keys) {
-  const wanted = keys.map(normKey);
-  for (const k of Object.keys(obj)) {
-    if (wanted.includes(normKey(k))) return obj[k];
-  }
-  return "";
-}
-
-// Repara texto UTF-8 que foi lido como Latin-1/Windows-1252 ("JoÃ£o" -> "João").
-// Só altera o texto se o resultado for UTF-8 válido; nomes corretos passam intactos.
-const CP1252_REV = {
-  0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
-  0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a, 0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x2018: 0x91,
-  0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02dc: 0x98,
-  0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f,
-};
-const MOJIBAKE_RE = /[\u00c2-\u00c5][\u0080-\u00bf\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013-\u2026\u2030\u2039\u203a\u20ac\u2122]/;
-
-function fixMojibake(str) {
-  let s = String(str ?? "");
-  for (let pass = 0; pass < 2 && MOJIBAKE_RE.test(s); pass++) {
-    const bytes = [];
-    for (const ch of s) {
-      const c = ch.codePointAt(0);
-      if (c <= 0xff) bytes.push(c);
-      else if (CP1252_REV[c] !== undefined) bytes.push(CP1252_REV[c]);
-      else return s;
-    }
-    try {
-      s = new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(bytes));
-    } catch {
-      return s;
-    }
-  }
-  return s;
-}
-
-// Valores sempre em NFC, para que "João" digitado no Mac e no Windows seja o mesmo texto
-const clean = (v) => fixMojibake(v).normalize("NFC").replace(/\s+/g, " ").trim();
-
-// Nomes padronizados em caixa alta
-const cleanName = (v) => clean(v).toLocaleUpperCase("pt-BR");
-
-// Corrige registros já salvos (importados antes desta versão)
-function repairStored() {
-  let changed = 0;
-  const fix = (obj) => {
-    const nome = cleanName(obj.nome);
-    const instituicao = clean(obj.instituicao);
-    if (nome !== obj.nome || instituicao !== (obj.instituicao ?? "")) changed++;
-    return { ...obj, nome, instituicao };
-  };
-  participants = participants.map(fix);
-  attendance = attendance.map(fix);
-  if (changed) {
-    save(PARTICIPANTS_FILE, participants);
-    save(ATTENDANCE_FILE, attendance);
-    console.log(`Nomes padronizados/corrigidos em ${changed} registro(s) salvos.`);
-  }
-}
-repairStored();
-
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 app.use(express.static(join(__dirname, "public")));
@@ -202,15 +106,24 @@ app.post("/api/login", (req, res) => {
 
 // ---------- 1. Importações (ADMIN) ----------
 function normalizeRows(rows) {
+  const find = (obj, keys) => {
+    for (const k of Object.keys(obj)) {
+      const norm = k.toString().trim().toLowerCase();
+      if (keys.includes(norm)) return obj[k];
+    }
+    return "";
+  };
   return rows
     .map((r) => {
-      const nome = cleanName(findCol(r, ["nome", "name", "participante", "nome completo"]));
+      const nome = find(r, ["nome", "name", "participante", "nome completo"]);
       if (!nome) return null;
       return {
         id: genId(),
-        nome,
-        email: clean(findCol(r, ["email", "e-mail"])),
-        instituicao: clean(findCol(r, ["instituicao", "institution", "org", "organizacao"])),
+        nome: String(nome).trim(),
+        email: String(find(r, ["email", "e-mail"]) || "").trim(),
+        instituicao: String(
+          find(r, ["instituicao", "instituição", "institution", "org", "organização"]) || ""
+        ).trim(),
       };
     })
     .filter(Boolean);
@@ -220,7 +133,9 @@ app.post("/api/import", auth("ADMIN"), upload.single("file"), (req, res) => {
   try {
     let rows;
     if (req.file) {
-      rows = readSheetRows(req.file.buffer);
+      const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     } else if (req.body && Array.isArray(req.body.rows)) {
       rows = req.body.rows;
     } else {
@@ -248,8 +163,10 @@ app.post("/api/import-url", auth("ADMIN"), async (req, res) => {
     if (!url) return res.status(400).json({ error: "Informe a URL." });
     const r = await fetch(url);
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const buf = Buffer.from(await r.arrayBuffer());
-    const rows = readSheetRows(buf);
+    const text = await r.text();
+    const wb = XLSX.read(text, { type: "string" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     const novos = normalizeRows(rows);
     const existentesEmail = new Set(participants.filter((p) => p.email).map((p) => p.email.toLowerCase()));
     const adicionados = novos.filter((p) => !p.email || !existentesEmail.has(p.email.toLowerCase()));
@@ -418,20 +335,29 @@ function inferPeriodo(periodoStr, horarioStr) {
 }
 
 function normalizeAttendanceRows(rows) {
+  const find = (obj, keys) => {
+    for (const k of Object.keys(obj)) {
+      const norm = k.toString().trim().toLowerCase();
+      if (keys.includes(norm)) return obj[k];
+    }
+    return "";
+  };
   return rows
     .map((r) => {
-      const nome = cleanName(findCol(r, ["nome", "name", "participante", "nome completo"]));
-      const data = clean(findCol(r, ["data", "date", "dia"]));
+      const nome = find(r, ["nome", "name", "participante", "nome completo"]);
+      const data = find(r, ["data", "date", "dia"]);
       if (!nome || !data) return null;
 
-      const horario = clean(findCol(r, ["horario", "hora", "time"]));
-      const periodoRaw = clean(findCol(r, ["periodo", "turno", "shift"]));
+      const horario = String(find(r, ["horario", "horário", "hora", "time"]) || "").trim();
+      const periodoRaw = String(find(r, ["periodo", "período", "turno", "shift"]) || "").trim();
 
       return {
-        id: clean(findCol(r, ["id", "codigo"])),
-        nome,
-        instituicao: clean(findCol(r, ["instituicao", "institution", "org", "organizacao"])),
-        data,
+        id: String(find(r, ["id", "codigo", "código"]) || "").trim(),
+        nome: String(nome).trim(),
+        instituicao: String(
+          find(r, ["instituicao", "instituição", "institution", "org", "organização"]) || ""
+        ).trim(),
+        data: String(data).trim(),
         periodo: inferPeriodo(periodoRaw, horario),
         horario: horario || "—",
       };
@@ -513,7 +439,9 @@ app.post("/api/validate-attendance", auth("ADMIN"), upload.single("file"), (req,
   try {
     if (!req.file) return res.status(400).json({ error: "Envie um arquivo de planilha." });
 
-    const rows = readSheetRows(req.file.buffer);
+    const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     const registros = normalizeAttendanceRows(rows);
 
     if (registros.length === 0) {
