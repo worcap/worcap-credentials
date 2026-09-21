@@ -6,39 +6,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>WORCAP 2026 Credenciamento</title>
   <link rel="icon" type="image/png" href="assets/icon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
 
-  <header id="appHeader" style="display: none; justify-content: space-between; align-items: flex-start;">
+  <header id="appHeader" style="display: none;">
     <div class="main-header">
-      <div class="eyebrow">
-        <img src="assets/icon.png" alt="Descrição da imagem" class="img-icon">
-      </div>
-      <div style="height: 70px;">
+      <img src="assets/icon.png" alt="WORCAP" class="img-icon">
+      <div class="header-text">
         <h1>Credenciamento</h1>
         <div class="header-profile">
-          <p id="userRoleBadge" style="color: var(--gold); font-weight:600;"></p>
-          <button id="btnLogout" class="btn-ghost" style="margin-left: 10px; padding: 6px 12px; font-size: 12px; display: none;">Sair</button>
+          <p id="userRoleBadge"></p>
+          <button id="btnLogout" class="btn-ghost btn-sm" style="display: none;">
+            <svg class="i" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sair
+          </button>
         </div>
       </div>
     </div>
   </header>
 
   <!-- TELA DE LOGIN -->
-  <div id="loginOverlay" style="padding: 24px; max-width: 380px; margin: 40px auto; display: none; margin-top: 160px;">
+  <div id="loginOverlay" style="display: none;">
     <div class="card">
-      <form type="submit">
-        <h2>Acesso ao Sistema</h2>
+      <form onsubmit="return false;">
+        <h2>Acesso ao sistema</h2>
         <p class="hint">Entre com suas credenciais.</p>
         <label class="field" for="txtUser">Usuário</label>
-        <input type="text" id="txtUser" placeholder="admin ou operador" />
-        <br><br>
-        <label class="field" for="txtPass">Senha</label>
-        <input type="password" id="txtPass"
-          style="width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fcfbf7;" />
+        <input type="text" id="txtUser" placeholder="admin ou operador" autocomplete="username" />
+        <label class="field" for="txtPass" style="margin-top:14px">Senha</label>
+        <input type="password" id="txtPass" autocomplete="current-password" />
         <button class="btn-primary" style="margin-top:18px" id="btnLogin">Entrar</button>
       </form>
     </div>
@@ -47,14 +49,16 @@
   <main>
     <!-- VIEW: IMPORTAR / CRACHÁS (ADMIN) -->
     <section id="view-setup" class="view active">
-      <div class="card">
+      <div class="card" id="importCard">
         <h2>Importar inscritos</h2>
         <p class="hint">A planilha precisa de uma coluna <strong>nome</strong>. Colunas <em>email</em> e
           <em>instituicao</em> são opcionais.
         </p>
         <label class="file-drop" id="fileDrop">
           <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden />
-          Toque para escolher um arquivo <strong>.xlsx / .csv</strong><br><span id="fileName"></span>
+          <svg class="i i-lg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Toque para escolher um arquivo <strong>.xlsx / .csv</strong></span>
+          <span id="fileName" class="file-name"></span>
         </label>
         <button class="btn-primary" style="margin-top:14px" id="btnImportFile">Importar arquivo</button>
 
@@ -65,34 +69,47 @@
         <button class="btn-ghost" style="width:100%;margin-top:8px" id="btnImportUrl">Importar da URL</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="badgesCard">
         <h2>Crachás com QR Code</h2>
         <p class="hint" id="setupCount">Nenhum participante importado ainda.</p>
+        <p class="hint">Cada crachá tem 8 × 5 cm. A impressão sai em A4 paisagem, 12 crachás por folha.</p>
         <div class="btn-row">
-          <button class="btn-ghost" id="btnGenBadges">Gerar crachás</button>
-          <button class="btn-ghost" id="btnPrint">Imprimir</button>
+          <button class="btn-ghost" id="btnGenBadges">
+            <svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
+            Gerar crachás
+          </button>
+          <button class="btn-ghost" id="btnPrint">
+            <svg class="i" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Imprimir
+          </button>
         </div>
-        <div id="printArea" style="margin-top:16px"></div>
+        <div id="printArea"></div>
       </div>
     </section>
 
     <!-- VIEW: SCANNER (USER e ADMIN) -->
     <section id="view-scan" class="view">
       <div class="card">
-        <h2>Credenciar Participante</h2>
+        <h2>Credenciar participante</h2>
         <p class="hint">Escolha o período ou use a detecção automática pelo horário.</p>
 
-        <label class="field" for="scanPeriodo">Período de Credenciamento</label>
-        <select id="scanPeriodo" style="width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; margin-bottom: 14px; background: #fcfbf7;">
-          <option value="auto">Automático (Horário atual)</option>
+        <label class="field" for="scanPeriodo">Período de credenciamento</label>
+        <select id="scanPeriodo">
+          <option value="auto">Automático (horário atual)</option>
           <option value="Manhã">Manhã</option>
           <option value="Tarde">Tarde</option>
         </select>
 
         <div id="reader"></div>
         <div class="btn-row">
-          <button class="btn-primary" id="btnStartScan">Iniciar câmera</button>
-          <button class="btn-ghost" id="btnStopScan">Parar</button>
+          <button class="btn-primary" id="btnStartScan">
+            <svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+            Iniciar câmera
+          </button>
+          <button class="btn-ghost" id="btnStopScan">
+            <svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+            Parar
+          </button>
         </div>
         <div class="scan-result" id="scanResult"></div>
       </div>
@@ -107,18 +124,20 @@
         </div>
         <div class="stat">
           <div class="num" id="stHojeManha">0</div>
-          <div class="lbl">Hoje (Manhã)</div>
+          <div class="lbl">Hoje, manhã</div>
         </div>
         <div class="stat">
           <div class="num" id="stHojeTarde">0</div>
-          <div class="lbl">Hoje (Tarde)</div>
+          <div class="lbl">Hoje, tarde</div>
         </div>
       </div>
       <div class="card">
         <h2>Presenças registradas</h2>
         <p class="hint">Mais recentes primeiro. Uma presença por participante em cada período.</p>
-        <button class="btn-ghost" style="width:100%;margin-bottom:14px" id="btnExport">Exportar planilha
-          (.xlsx)</button>
+        <button class="btn-ghost" style="width:100%;margin-bottom:14px" id="btnExport">
+          <svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar planilha (.xlsx)
+        </button>
         <ul class="plist" id="attList">
           <li class="empty">Sem registros ainda.</li>
         </ul>
@@ -130,19 +149,18 @@
       <div class="card">
         <h2>Conferir presenças</h2>
         <p class="hint">
-          Visualize as estatísticas consolidadas dos credenciamentos atuais do sistema ou faça o upload de uma planilha externa.
+          Veja as estatísticas dos credenciamentos atuais do sistema ou envie uma planilha externa.
         </p>
 
-        <button class="btn-primary" style="width: 100%; margin-bottom: 16px;" id="btnLoadCurrentStats">
-          Carregar dados atuais do sistema
-        </button>
+        <button class="btn-primary" id="btnLoadCurrentStats">Carregar dados atuais do sistema</button>
 
         <div class="divider">ou importar planilha externa</div>
 
-        <label class="file-drop" id="fileDropValidate" style="margin-top: 10px;">
+        <label class="file-drop" id="fileDropValidate">
           <input type="file" id="fileInputValidate" accept=".xlsx,.xls,.csv" hidden />
-          Upload da planilha de presenças <strong>.xlsx / .csv</strong><br>
-          <span id="fileNameValidate"></span>
+          <svg class="i i-lg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Planilha de presenças <strong>.xlsx / .csv</strong></span>
+          <span id="fileNameValidate" class="file-name"></span>
         </label>
         <button class="btn-ghost" style="width: 100%; margin-top:14px" id="btnValidate">Validar planilha</button>
       </div>
@@ -152,10 +170,22 @@
   </main>
 
   <nav>
-    <button id="setup" class="active" data-view="setup"><span class="ico">📋</span>Inscritos</button>
-    <button id="scan" data-view="scan"><span class="ico">📷</span>Credenciar</button>
-    <button id="list" data-view="list"><span class="ico">✅</span>Presenças</button>
-    <button id="validate" data-view="validate"><span class="ico">🧾</span>Conferir</button>
+    <button id="setup" class="active" data-view="setup">
+      <svg class="i ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Inscritos
+    </button>
+    <button id="scan" data-view="scan">
+      <svg class="i ico" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+      Credenciar
+    </button>
+    <button id="list" data-view="list">
+      <svg class="i ico" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+      Presenças
+    </button>
+    <button id="validate" data-view="validate">
+      <svg class="i ico" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+      Conferir
+    </button>
   </nav>
 
   <div class="toast" id="toast"></div>

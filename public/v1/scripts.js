@@ -7,31 +7,6 @@ let currentRole = localStorage.getItem("jwt_role") || null;
 
 const $ = (s) => document.querySelector(s);
 
-// Escapa texto vindo da planilha antes de inserir no HTML
-const esc = (v) =>
-  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-// Ícones SVG de traço (substituem os emojis)
-const svg = (paths) => `<svg class="i" viewBox="0 0 24 24">${paths}</svg>`;
-const ICON = {
-  check: svg('<circle cx="12" cy="12" r="10"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'),
-  info: svg('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'),
-  alert: svg('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>'),
-  search: svg('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
-  userX: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5"/><path d="m22 8-5 5"/>'),
-};
-
-// Ajusta o tamanho do nome para caber em até 4 linhas, sem cortar palavras
-function fitName(el, maxLines = 4) {
-  for (let pt = 15; pt >= 8.5; pt -= 0.5) {
-    el.style.fontSize = pt + "pt";
-    const lineHeightPx = pt * 1.1 * (96 / 72);
-    const cabeAltura = el.scrollHeight <= lineHeightPx * maxLines + 1;
-    const cabeLargura = el.scrollWidth <= el.clientWidth + 1;
-    if (cabeAltura && cabeLargura) return;
-  }
-}
-
 const toast = (msg) => {
   const t = $("#toast");
   if (!t) return;
@@ -154,6 +129,17 @@ if (btnLogout) btnLogout.onclick = logout;
 function switchView(viewName) {
   document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
   document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
+  const btns = ["setup", "scan", "list", "validate"];
+  for (let b of btns) {
+    let btn = document.getElementById(`${b}`);
+    if (b === viewName) {
+      btn.style.backgroundColor = "#b8b8b8";
+      btn.style.color = "white";
+    } else {
+      btn.style.backgroundColor = "white";
+      btn.style.color = "black";
+    }
+  }
   const targetBtn = document.querySelector(`nav button[data-view="${viewName}"]`);
   if (targetBtn) targetBtn.classList.add("active");
 
@@ -240,28 +226,35 @@ if (btnGenBadges) {
       if (!ps.length) return toast("Importe participantes primeiro.");
       const area = $("#printArea");
       area.innerHTML = "";
-      // A medição do nome depende da fonte final já carregada
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
       toast("Gerando " + ps.length + " crachá(s)...");
 
       for (const p of ps) {
         const q = await api("/api/qrcode/" + p.id);
         const div = document.createElement("div");
+        // div.className = "badge";
+        // div.innerHTML = `
+        //   <div class="top"><div class="ev">Conferência Acadêmica</div></div>
+        //   <div class="body">
+        //     <img src="${q.qr}" alt="QR ${p.id}" />
+        //     <div class="bn">${p.nome}</div>
+        //     ${p.instituicao ? `<div class="bi">${p.instituicao}</div>` : ""}
+        //     <div class="bid">${p.id}</div>
+        //   </div>`;
+        // area.appendChild(div);
         div.className = "badge";
         div.innerHTML = `
-          <div class="badge-info">
-            <div class="bn">${esc(p.nome)}</div>
-            ${p.instituicao ? `<div class="bi">${esc(p.instituicao)}</div>` : ""}
-          </div>
-          <div class="badge-qr">
-            <img src="${q.qr}" alt="QR ${esc(p.id)}" />
-            <div class="bid">${esc(p.id)}</div>
+          <div class="badge-content">
+            <div class="badge-info">
+              <div class="bn">${p.nome}</div>
+              ${p.instituicao ? `<div class="bi">${p.instituicao}</div>` : ""}
+              <div class="bid">${p.id}</div>
+            </div>
+            <div class="badge-qr">
+              <img src="${q.qr}" alt="QR ${p.id}" />
+            </div>
           </div>`;
         area.appendChild(div);
-        fitName(div.querySelector(".bn"));
       }
-      const folhas = Math.ceil(ps.length / 12);
-      toast(`${ps.length} crachá(s) prontos · ${folhas} folha(s) A4.`);
     } catch (e) {
       toast(e.message);
     }
@@ -270,11 +263,9 @@ if (btnGenBadges) {
 
 const btnPrint = $("#btnPrint");
 if (btnPrint) {
-  btnPrint.onclick = async () => {
+  btnPrint.onclick = () => {
     const area = $("#printArea");
     if (!area || !area.children.length) return toast("Gere os crachás antes de imprimir.");
-    // Garante que a fonte já carregou antes de montar a página de impressão
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
     window.print();
   };
 }
@@ -340,16 +331,16 @@ async function onScan(text) {
 
     box.className = "scan-result show " + (r.duplicado ? "dup" : "ok");
     box.innerHTML = `
-      <div class="icon">${r.duplicado ? ICON.info : ICON.check}</div>
-      <div class="name">${esc(r.nome)}</div>
-      <div class="meta">${r.instituicao ? esc(r.instituicao) + " · " : ""}${esc(r.msg)} às ${esc(r.horario)}</div>`;
+      <div class="icon">${r.duplicado ? "ℹ️" : "✅"}</div>
+      <div class="name">${r.nome}</div>
+      <div class="meta">${r.instituicao ? r.instituicao + " · " : ""}${r.msg} às ${r.horario}</div>`;
     stopScanner()
   } catch (e) {
     box.className = "scan-result show err";
     box.innerHTML = `
-      <div class="icon">${ICON.alert}</div>
+      <div class="icon">⚠️</div>
       <div class="name">Não reconhecido</div>
-      <div class="meta">${esc(e.message)}</div>`;
+      <div class="meta">${e.message}</div>`;
   }
   setTimeout(() => box.classList.remove("show"), 3500);
 }
@@ -395,10 +386,10 @@ async function loadAttendance() {
         (a) => `
         <li>
           <div class="info">
-            <div class="n">${esc(a.nome)}</div>
-            <div class="s">${esc(a.instituicao || a.id)} · ${esc(a.data)} (${esc(a.periodo || "—")})</div>
+            <div class="n">${a.nome}</div>
+            <div class="s">${a.instituicao || a.id} · ${a.data} (${a.periodo || "—"})</div>
           </div>
-          <div class="time">${esc(a.horario)}</div>
+          <div class="time">${a.horario}</div>
         </li>`
       )
       .join("");
@@ -467,32 +458,32 @@ function renderValidateResults(r) {
     .map(
       (p) => `
       <tr>
-        <td>${esc(p.nome)}</td>
-        <td>${esc(p.instituicao || "—")}</td>
+        <td>${p.nome}</td>
+        <td>${p.instituicao || "—"}</td>
         <td>${p.totalPeriodos}</td>
-        <td class="datas">${esc(p.periodos.join(", "))}</td>
+        <td class="datas">${p.periodos.join(", ")}</td>
       </tr>`
     )
     .join("");
 
   const porPeriodoRows = porPeriodo
-    .map((d) => `<tr><td>${esc(d.periodo)}</td><td>${d.total}</td></tr>`)
+    .map((d) => `<tr><td>${d.periodo}</td><td>${d.total}</td></tr>`)
     .join("");
 
   const ausentesHtml = ausentes.length
     ? `
     <div class="warn-box">
-      <h3>${ICON.userX} Inscritos sem nenhuma presença (${ausentes.length})</h3>
-      <ul>${ausentes.map((a) => `<li>${esc(a.nome)}${a.instituicao ? " · " + esc(a.instituicao) : ""}</li>`).join("")}</ul>
+      <h3>⚠️ Inscritos sem nenhuma presença (${ausentes.length})</h3>
+      <ul>${ausentes.map((a) => `<li>${a.nome}${a.instituicao ? " · " + a.instituicao : ""}</li>`).join("")}</ul>
     </div>`
     : "";
 
   const naoReconhecidosHtml = naoReconhecidos.length
     ? `
-    <div class="warn-box danger">
-      <h3>${ICON.search} Registros com ID não cadastrado no sistema (${naoReconhecidos.length})</h3>
+    <div class="warn-box">
+      <h3>🔎 Registros com ID não cadastrado no sistema (${naoReconhecidos.length})</h3>
       <p class="hint" style="margin:0 0 8px">Podem ser inscritos importados só no celular, ou erro de digitação/QR.</p>
-      <ul>${naoReconhecidos.map((n) => `<li>${esc(n.nome)} (${esc(n.id)})</li>`).join("")}</ul>
+      <ul>${naoReconhecidos.map((n) => `<li>${n.nome} (${n.id})</li>`).join("")}</ul>
     </div>`
     : "";
 
