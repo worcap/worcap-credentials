@@ -200,6 +200,65 @@ if (btnImportFile) {
   };
 }
 
+const fileDropUpdate = $("#fileDropUpdate");
+const fileInputUpdate = $("#fileInputUpdate");
+
+if (fileDropUpdate && fileInputUpdate) {
+  fileDropUpdate.onclick = () => fileInputUpdate.click();
+  fileInputUpdate.onchange = (e) => {
+    const f = e.target.files[0];
+    $("#fileNameUpdate").textContent = f ? f.name : "";
+  };
+}
+
+const btnUpdateParticipants = $("#btnUpdateParticipants");
+if (btnUpdateParticipants) {
+  btnUpdateParticipants.onclick = async () => {
+    const f = $("#fileInputUpdate").files[0];
+    if (!f) return toast("Escolha a planilha de correções primeiro.");
+    const fd = new FormData();
+    fd.append("file", f);
+    try {
+      const r = await api("/api/update-participants", { method: "POST", body: fd });
+      renderUpdateResults(r);
+      toast(`${r.atualizados.length} cadastro(s) atualizados.`);
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+}
+
+function renderUpdateResults(r) {
+  const box = $("#updateResults");
+  const lista = (titulo, itens, classe = "") =>
+    itens.length
+      ? `<div class="warn-box ${classe}"><h3>${titulo} (${itens.length})</h3><ul>${itens
+          .map((i) => `<li>${esc(i)}</li>`)
+          .join("")}</ul></div>`
+      : "";
+
+  const alterados = r.atualizados.length
+    ? `<div class="vtable-wrap"><table class="vtable">
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Instituição</th></tr></thead>
+        <tbody>${r.atualizados
+          .map(
+            (a) => `<tr>
+              <td>${esc(a.nome)}</td>
+              <td>${esc(a.depois.email || "—")}</td>
+              <td class="datas">${esc(a.depois.instituicao || "—")}</td>
+            </tr>`
+          )
+          .join("")}</tbody></table></div>`
+    : "";
+
+  box.innerHTML = `
+    <div class="section-title">${r.atualizados.length} de ${r.totalLinhas} linha(s) aplicadas</div>
+    ${alterados}
+    ${lista(`${ICON.info} Já estavam corretos`, r.semMudanca)}
+    ${lista(`${ICON.userX} Nome não encontrado no sistema`, r.semCorrespondencia, "danger")}
+    ${lista(`${ICON.alert} Nome repetido no sistema, corrija à mão`, r.ambiguos, "danger")}`;
+}
+
 const btnImportUrl = $("#btnImportUrl");
 if (btnImportUrl) {
   btnImportUrl.onclick = async () => {

@@ -1,4 +1,8 @@
 import "dotenv/config"; // Carrega as variáveis do arquivo .env
+
+// Servidores na nuvem (Railway incluso) rodam em UTC. Sem isto, um check-in às 10h
+// de Brasília seria gravado como 13h, período "Tarde", e as datas virariam às 21h.
+process.env.TZ = process.env.TZ || "America/Sao_Paulo";
 import express from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -10,6 +14,14 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// Falha logo na inicialização, com mensagem clara, se faltar configuração
+const obrigatorias = ["JWT_SECRET", "ADMIN_USER", "ADMIN_PASS", "OPERATOR_USER", "OPERATOR_PASS"];
+const faltando = obrigatorias.filter((v) => !process.env[v]);
+if (faltando.length) {
+  console.error(`Variáveis de ambiente ausentes: ${faltando.join(", ")}`);
+  process.exit(1);
+}
 
 // Usuários definidos via Variáveis de Ambiente (com fallbacks opcionais)
 const USERS = [
@@ -26,7 +38,11 @@ const USERS = [
 ];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rawVolume = process.env.VOLUME || "data";
+// No Railway, o caminho do volume anexado vem em RAILWAY_VOLUME_MOUNT_PATH
+const rawVolume = process.env.VOLUME || process.env.RAILWAY_VOLUME_MOUNT_PATH || "data";
+if (process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+  console.warn("ATENÇÃO: nenhum volume anexado. Inscritos e presenças serão apagados a cada deploy ou reinício.");
+}
 
 // Se for absoluto (/data), usa direto; se for relativo, junta com __dirname
 const DATA_DIR = isAbsolute(rawVolume) ? rawVolume : join(__dirname, rawVolume);
@@ -258,6 +274,83 @@ app.post("/api/import-url", auth("ADMIN"), async (req, res) => {
     res.json({ total: participants.length, adicionados: adicionados.length });
   } catch (e) {
     res.status(500).json({ error: "Falha ao importar da URL: " + e.message });
+  }
+});
+
+// ---------- 1b. Atualizar cadastro de quem já existe (ADMIN) ----------
+// Casa pelo nome (ignorando acentos, maiúsculas e espaços duplicados) e corrige
+// e-mail e instituição. Não cria, não remove e não altera IDs nem QR Codes.
+const chaveNome = (n) =>
+  clean(n).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+app.post("/api/update-participants", auth("ADMIN"), upload.single("file"), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "Envie um arquivo de planilha." });
+
+    const rows = readSheetRows(req.file.buffer);
+
+    // Índice de nomes já cadastrados
+    const porNome = new Map();
+    for (const p of participants) {
+      const k = chaveNome(p.nome);
+      if (!porNome.has(k)) porNome.set(k, []);
+      porNome.get(k).push(p);
+    }
+
+    const atualizados = [];
+    const semCorrespondencia = [];
+    const ambiguos = [];
+    const semMudanca = [];
+
+    for (const r of rows) {
+      const nome = clean(findCol(r, ["nome", "name", "participante", "nome completo"]));
+      if (!nome) continue;
+
+      const achados = porNome.get(chaveNome(nome)) || [];
+      if (achados.length === 0) {
+        semCorrespondencia.push(nome);
+        continue;
+      }
+      if (achados.length > 1) {
+        ambiguos.push(nome);
+        continue;
+      }
+
+      const p = achados[0];
+      const email = clean(findCol(r, ["email", "e-mail"]));
+      const instituicao = clean(findCol(r, ["instituicao", "institution", "org", "organizacao"]));
+
+      const antes = { email: p.email || "", instituicao: p.instituicao || "" };
+      if (email) p.email = email;
+      if (instituicao) p.instituicao = instituicao;
+
+      if (antes.email === (p.email || "") && antes.instituicao === (p.instituicao || "")) {
+        semMudanca.push(p.nome);
+        continue;
+      }
+
+      // Presenças guardam uma cópia da instituição
+      for (const a of attendance) {
+        if (a.id === p.id) a.instituicao = p.instituicao;
+      }
+
+      atualizados.push({ id: p.id, nome: p.nome, antes, depois: { email: p.email || "", instituicao: p.instituicao || "" } });
+    }
+
+    if (atualizados.length) {
+      save(PARTICIPANTS_FILE, participants);
+      save(ATTENDANCE_FILE, attendance);
+    }
+
+    res.json({
+      totalLinhas: rows.length,
+      atualizados,
+      semMudanca,
+      semCorrespondencia,
+      ambiguos,
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Falha ao atualizar cadastros: " + e.message });
   }
 });
 
@@ -554,4 +647,6 @@ app.post("/api/validate-attendance", auth("ADMIN"), upload.single("file"), (req,
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor em http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Servidor na porta ${PORT} · dados em ${DATA_DIR} · fuso ${process.env.TZ}`);
+});
