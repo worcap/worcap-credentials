@@ -325,7 +325,7 @@ app.post("/api/update-participants", auth("ADMIN"), upload.single("file"), (req,
       if (instituicao) p.instituicao = instituicao;
 
       if (antes.email === (p.email || "") && antes.instituicao === (p.instituicao || "")) {
-        semMudanca.push(p.nome);
+        semMudanca.push({ id: p.id, nome: p.nome });
         continue;
       }
 

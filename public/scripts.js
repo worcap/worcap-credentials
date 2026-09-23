@@ -251,12 +251,23 @@ function renderUpdateResults(r) {
           .join("")}</tbody></table></div>`
     : "";
 
+  // Todos os que a planilha localizou no sistema, tenham mudado ou não
+  const idsDaPlanilha = [...r.atualizados.map((a) => a.id), ...r.semMudanca.map((m) => m.id)];
+
+  const btnCrachas = idsDaPlanilha.length
+    ? `<button class="btn-primary" style="margin-top:14px" id="btnBadgesUpdated">Gerar crachás destes ${idsDaPlanilha.length}</button>`
+    : "";
+
   box.innerHTML = `
     <div class="section-title">${r.atualizados.length} de ${r.totalLinhas} linha(s) aplicadas</div>
     ${alterados}
-    ${lista(`${ICON.info} Já estavam corretos`, r.semMudanca)}
+    ${btnCrachas}
+    ${lista(`${ICON.info} Já estavam corretos`, r.semMudanca.map((m) => m.nome))}
     ${lista(`${ICON.userX} Nome não encontrado no sistema`, r.semCorrespondencia, "danger")}
     ${lista(`${ICON.alert} Nome repetido no sistema, corrija à mão`, r.ambiguos, "danger")}`;
+
+  const btn = $("#btnBadgesUpdated");
+  if (btn) btn.onclick = () => gerarCrachasDaPlanilha(idsDaPlanilha);
 }
 
 const btnImportUrl = $("#btnImportUrl");
@@ -291,40 +302,60 @@ async function refreshCount() {
   } catch {}
 }
 
+// Monta os crachás de uma lista de participantes
+async function gerarCrachas(ps) {
+  if (!ps.length) return toast("Nenhum participante para gerar.");
+  const area = $("#printArea");
+  area.innerHTML = "";
+  toast(`Gerando ${ps.length} crachá(s)...`);
+
+  // A medição do nome depende da fonte final já carregada
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+
+  for (const p of ps) {
+    const q = await api("/api/qrcode/" + p.id);
+    const div = document.createElement("div");
+    div.className = "badge";
+    div.innerHTML = `
+      <div class="badge-info">
+        <div class="bn">${esc(p.nome)}</div>
+        ${p.instituicao ? `<div class="bi">${esc(p.instituicao)}</div>` : ""}
+      </div>
+      <div class="badge-qr">
+        <img src="${q.qr}" alt="QR ${esc(p.id)}" />
+        <div class="bid">${esc(p.id)}</div>
+      </div>`;
+    area.appendChild(div);
+    fitName(div.querySelector(".bn"));
+  }
+
+  const folhas = Math.ceil(ps.length / 12);
+  toast(`${ps.length} crachá(s) prontos · ${folhas} folha(s) A4.`);
+  area.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 const btnGenBadges = $("#btnGenBadges");
 if (btnGenBadges) {
   btnGenBadges.onclick = async () => {
     try {
       const ps = await api("/api/participants");
       if (!ps.length) return toast("Importe participantes primeiro.");
-      const area = $("#printArea");
-      area.innerHTML = "";
-      // A medição do nome depende da fonte final já carregada
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      toast("Gerando " + ps.length + " crachá(s)...");
-
-      for (const p of ps) {
-        const q = await api("/api/qrcode/" + p.id);
-        const div = document.createElement("div");
-        div.className = "badge";
-        div.innerHTML = `
-          <div class="badge-info">
-            <div class="bn">${esc(p.nome)}</div>
-            ${p.instituicao ? `<div class="bi">${esc(p.instituicao)}</div>` : ""}
-          </div>
-          <div class="badge-qr">
-            <img src="${q.qr}" alt="QR ${esc(p.id)}" />
-            <div class="bid">${esc(p.id)}</div>
-          </div>`;
-        area.appendChild(div);
-        fitName(div.querySelector(".bn"));
-      }
-      const folhas = Math.ceil(ps.length / 12);
-      toast(`${ps.length} crachá(s) prontos · ${folhas} folha(s) A4.`);
+      await gerarCrachas(ps);
     } catch (e) {
       toast(e.message);
     }
   };
+}
+
+// Gera apenas os crachás das pessoas que vieram na planilha de correção
+async function gerarCrachasDaPlanilha(ids) {
+  try {
+    const todos = await api("/api/participants");
+    const alvo = new Set(ids);
+    await gerarCrachas(todos.filter((p) => alvo.has(p.id)));
+  } catch (e) {
+    toast(e.message);
+  }
 }
 
 const btnPrint = $("#btnPrint");
