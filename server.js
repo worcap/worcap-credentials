@@ -289,64 +289,99 @@ app.post("/api/update-participants", auth("ADMIN"), upload.single("file"), (req,
 
     const rows = readSheetRows(req.file.buffer);
 
-    // Índice de nomes já cadastrados
+    // Índices de quem já está cadastrado
     const porNome = new Map();
+    const porEmail = new Map();
     for (const p of participants) {
-      const k = chaveNome(p.nome);
-      if (!porNome.has(k)) porNome.set(k, []);
-      porNome.get(k).push(p);
+      const kn = chaveNome(p.nome);
+      if (!porNome.has(kn)) porNome.set(kn, []);
+      porNome.get(kn).push(p);
+      if (p.email) porEmail.set(p.email.toLowerCase(), p);
     }
 
+    const ids = []; // um ID por linha da planilha, na mesma ordem
     const atualizados = [];
-    const semCorrespondencia = [];
-    const ambiguos = [];
     const semMudanca = [];
+    const criados = [];
+    const ambiguos = [];
 
     for (const r of rows) {
-      const nome = clean(findCol(r, ["nome", "name", "participante", "nome completo"]));
+      const nome = cleanName(findCol(r, ["nome", "name", "participante", "nome completo"]));
       if (!nome) continue;
 
-      const achados = porNome.get(chaveNome(nome)) || [];
-      if (achados.length === 0) {
-        semCorrespondencia.push(nome);
-        continue;
-      }
-      if (achados.length > 1) {
-        ambiguos.push(nome);
-        continue;
-      }
-
-      const p = achados[0];
       const email = clean(findCol(r, ["email", "e-mail"]));
       const instituicao = clean(findCol(r, ["instituicao", "institution", "org", "organizacao"]));
 
-      const antes = { email: p.email || "", instituicao: p.instituicao || "" };
+      let p = null;
+      const porNomeAchados = porNome.get(chaveNome(nome)) || [];
+
+      if (porNomeAchados.length === 1) {
+        p = porNomeAchados[0];
+      } else if (porNomeAchados.length > 1) {
+        // Mesmo nome mais de uma vez: só resolve se o e-mail identificar a pessoa
+        p = (email && porNomeAchados.find((x) => (x.email || "").toLowerCase() === email.toLowerCase())) || null;
+        if (!p) {
+          ambiguos.push(nome);
+          continue;
+        }
+      } else if (email && porEmail.has(email.toLowerCase())) {
+        p = porEmail.get(email.toLowerCase()); // nome mudou, e-mail continua o mesmo
+      }
+
+      // Ninguém encontrado: entra como novo inscrito, com ID próprio
+      if (!p) {
+        p = { id: genId(), nome, email, instituicao };
+        participants.push(p);
+        porNome.set(chaveNome(nome), [p]);
+        if (email) porEmail.set(email.toLowerCase(), p);
+        criados.push({ id: p.id, nome: p.nome });
+        ids.push(p.id);
+        continue;
+      }
+
+      // Já existe: mantém o ID e o QR Code, corrige os dados
+      const antes = { nome: p.nome, email: p.email || "", instituicao: p.instituicao || "" };
       if (email) p.email = email;
       if (instituicao) p.instituicao = instituicao;
+      p.nome = nome;
 
-      if (antes.email === (p.email || "") && antes.instituicao === (p.instituicao || "")) {
+      ids.push(p.id);
+
+      const mudou =
+        antes.nome !== p.nome || antes.email !== (p.email || "") || antes.instituicao !== (p.instituicao || "");
+
+      if (!mudou) {
         semMudanca.push({ id: p.id, nome: p.nome });
         continue;
       }
 
-      // Presenças guardam uma cópia da instituição
+      // Presenças guardam uma cópia do nome e da instituição
       for (const a of attendance) {
-        if (a.id === p.id) a.instituicao = p.instituicao;
+        if (a.id === p.id) {
+          a.nome = p.nome;
+          a.instituicao = p.instituicao;
+        }
       }
 
-      atualizados.push({ id: p.id, nome: p.nome, antes, depois: { email: p.email || "", instituicao: p.instituicao || "" } });
+      atualizados.push({
+        id: p.id,
+        nome: p.nome,
+        antes,
+        depois: { nome: p.nome, email: p.email || "", instituicao: p.instituicao || "" },
+      });
     }
 
-    if (atualizados.length) {
+    if (atualizados.length || criados.length) {
       save(PARTICIPANTS_FILE, participants);
       save(ATTENDANCE_FILE, attendance);
     }
 
     res.json({
       totalLinhas: rows.length,
+      ids,
       atualizados,
       semMudanca,
-      semCorrespondencia,
+      criados,
       ambiguos,
     });
   } catch (e) {

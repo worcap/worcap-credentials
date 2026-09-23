@@ -221,7 +221,7 @@ if (btnUpdateParticipants) {
     try {
       const r = await api("/api/update-participants", { method: "POST", body: fd });
       renderUpdateResults(r);
-      toast(`${r.atualizados.length} cadastro(s) atualizados.`);
+      toast(`${r.atualizados.length} atualizado(s) · ${(r.criados || []).length} novo(s).`);
     } catch (e) {
       toast(e.message);
     }
@@ -251,19 +251,19 @@ function renderUpdateResults(r) {
           .join("")}</tbody></table></div>`
     : "";
 
-  // Todos os que a planilha localizou no sistema, tenham mudado ou não
-  const idsDaPlanilha = [...r.atualizados.map((a) => a.id), ...r.semMudanca.map((m) => m.id)];
+  // Um ID por linha da planilha, na mesma ordem do arquivo
+  const idsDaPlanilha = r.ids || [];
 
   const btnCrachas = idsDaPlanilha.length
-    ? `<button class="btn-primary" style="margin-top:14px" id="btnBadgesUpdated">Gerar crachás destes ${idsDaPlanilha.length}</button>`
+    ? `<button class="btn-primary" style="margin-top:14px" id="btnBadgesUpdated">Gerar crachás desta planilha (${idsDaPlanilha.length})</button>`
     : "";
 
   box.innerHTML = `
-    <div class="section-title">${r.atualizados.length} de ${r.totalLinhas} linha(s) aplicadas</div>
+    <div class="section-title">${idsDaPlanilha.length} de ${r.totalLinhas} linha(s) prontas para crachá</div>
     ${alterados}
     ${btnCrachas}
     ${lista(`${ICON.info} Já estavam corretos`, r.semMudanca.map((m) => m.nome))}
-    ${lista(`${ICON.userX} Nome não encontrado no sistema`, r.semCorrespondencia, "danger")}
+    ${lista(`${ICON.check} Cadastrados agora, com ID novo`, (r.criados || []).map((c) => `${c.nome} (${c.id})`))}
     ${lista(`${ICON.alert} Nome repetido no sistema, corrija à mão`, r.ambiguos, "danger")}`;
 
   const btn = $("#btnBadgesUpdated");
@@ -351,8 +351,8 @@ if (btnGenBadges) {
 async function gerarCrachasDaPlanilha(ids) {
   try {
     const todos = await api("/api/participants");
-    const alvo = new Set(ids);
-    await gerarCrachas(todos.filter((p) => alvo.has(p.id)));
+    const porId = new Map(todos.map((p) => [p.id, p]));
+    await gerarCrachas(ids.map((id) => porId.get(id)).filter(Boolean));
   } catch (e) {
     toast(e.message);
   }
